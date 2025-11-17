@@ -1,0 +1,11 @@
+CompileFlags:
+  Add:
+    - -I/home/xtzhao/cutlass/include/
+    - -I/home/xtzhao/cutlass/tools/util/include/
+    - -I/home/xtzhao/cutlass/examples/common/
+    - -I/home/xtzhao/cutlass/include/cute
+    - -I/home/xtzhao/cuda/targets/include
+    - -I/home/xtzhao/miniconda3/envs/llm_inference/lib/python3.12/site-packages/torch/include
+    - -I/home/xtzhao/miniconda3/envs/llm_inference/lib/python3.12/site-packages/torch/include/torch/csrc/api/include/
+    - -I/home/xtzhao/miniconda3/envs/llm_inference/lib/python3.12/site-packages/torch/include/torch/csrc/api/include/torch/
+    
