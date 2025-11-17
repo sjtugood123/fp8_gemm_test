@@ -7,3 +7,5 @@ nvcc -O3 -std=c++17 -arch=sm_120a \
 -o bin/fp8_acc_bitwidth fp8_acc_bitwidth.cu -lcudart
 
 ./bin/fp8_acc_bitwidth
+
+cuobjdump -sass ./bin/fp8_acc_bitwidth > output.sass
