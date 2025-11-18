@@ -10,5 +10,8 @@ bitwidth test:
 ```
 chmod +x ./acc_bitwidth_test/compile_run.sh
 ./acc_bitwidth_test/compile_run.sh
-cat ./acc_bitwidth_test/output.sass
 ```
+
+result:
+
+On 5090 tensor core, the acc bitwidth is 25 for both fp4 and fp8
