@@ -1,5 +1,6 @@
 #include <cstdint>
 #include <cstdio>
+#include <cuda_fp4.h>
 #include <cute/arch/mma_sm120.hpp>
 
 #define CUDA_CHECK(call)                                                       \
@@ -12,16 +13,29 @@
     }                                                                          \
   } while (0)
 
-__global__ void test_fp4_mma_kernel() {
-  // (1.0 * 2^23)
-  // uint32_t t = 0b0'10010110'00000000000000000000000;
-  // (1.0 * 2^24)
-  uint32_t t = 0b0'10010111'00000000000000000000000;
-  float t_f = *((float *)&t);
-  float c0 = t_f;
-  float c1 = t_f;
-  float c2 = t_f;
-  float c3 = t_f;
+__host__ __device__ uint32_t float_to_fp4_reg(float x) {
+  __nv_fp4_storage_t raw_fp4 =
+      __nv_cvt_float_to_fp4(x, __NV_E2M1, cudaRoundNearest);
+  uint32_t code = (uint32_t)(raw_fp4 & 0x0F);
+  uint32_t byte_val = code << 2;
+
+  // 这样寄存器里就是 00xxxx00 00xxxx00 00xxxx00 00xxxx00
+  // 对应 8 个 FP4 元素
+  uint32_t full_reg = 0;
+  full_reg |= byte_val;
+  full_reg |= (byte_val << 8);
+  full_reg |= (byte_val << 16);
+  full_reg |= (byte_val << 24);
+
+  return full_reg;
+}
+
+__global__ void test_fp4_mma_kernel(float c, int num, float add) {
+  float ref_result = c + num * add;
+  float c0 = c;
+  float c1 = c;
+  float c2 = c;
+  float c3 = c;
 
   // 输出
   float d0, d1, d2, d3;
@@ -32,27 +46,20 @@ __global__ void test_fp4_mma_kernel() {
   // e2m1的bias是1，但是0001是非规格化数，0.M*2^(1-bias)，即0.5
   uint32_t a0 = 0, a1 = 0, a2 = 0, a3 = 0, b0 = 0, b1 = 0;
 
-  // 4个0.5
-  if (threadIdx.x == 0) {
-    a0 = 0b00001000'00001000'00001000'00001000;
-    a1 = 0b00000000'00000000'00000000'00000000;
-    a2 = 0b00000000'00000000'00000000'00000000;
-    a3 = 0b00000000'00000000'00000000'00000000;
-
-    b0 = 0b00000100'00000100'00000100'00000100;
-    b1 = 0b00000000'00000000'00000000'00000000;
-  }
-
-  // 8个0.25
   // fragment划分:https://docs.nvidia.com/cuda/parallel-thread-execution/#warp-level-matrix-fragment-mma-16832
-  if (threadIdx.x == 0 || threadIdx.x == 1) {
-    a0 = 0b00000100'00000100'00000100'00000100;
-    a1 = 0b00000000'00000000'00000000'00000000;
-    a2 = 0b00000000'00000000'00000000'00000000;
-    a3 = 0b00000000'00000000'00000000'00000000;
-
-    b0 = 0b00000100'00000100'00000100'00000100;
-    b1 = 0b00000000'00000000'00000000'00000000;
+  assert(num % 4 == 0 && num <= 128);
+  assert(add > 0.125);
+  if (num == 0.25) { // 0.25无法直接表示
+    add = 0.5;
+    if (threadIdx.x < num / 4) {
+      a0 = float_to_fp4_reg(add);
+      b0 = float_to_fp4_reg(add);
+    }
+  } else {
+    if (threadIdx.x < num / 4) {
+      a0 = float_to_fp4_reg(add);
+      b0 = float_to_fp4_reg(1.0f);
+    }
   }
 
   // 5. 执行内联汇编
@@ -67,29 +74,30 @@ __global__ void test_fp4_mma_kernel() {
         "f"(c2), "f"(c3));
 
   if (threadIdx.x == 0) {
-    // printf("\nThread 0 Result:\n");
-    printf("d0: %f\n", d0);
-    printf("d1: %f\n", d1);
-    // printf("d2: %f\n", d2);
-    // printf("d3: %f\n", d3);
+    if (d0 != ref_result) {
+      printf("Analysis: Result == C_init. Precision LOST.\n");
+    } else {
+      printf("Analysis: Result == 2^24+2. Precision KEPT.\n");
+    }
   }
 }
 
 int main() {
-  printf("\nfp4:\n");
-  test_fp4_mma_kernel<<<1, 32>>>();
+  printf("\n=== FP4 (E2M1) Precision Probe ===\n");
+  uint32_t c_init = 0b0'10010111'00000000000000000000000;
+  float c = *((float *)&c_init);
+  printf("C_init:\n%f\n", c);
+  printf("ref result:\n%f\n", c + 2.0f);
+  printf("\n2^24 + 0.5 + 0.5 + 0.5 + 0.5\n");
+  test_fp4_mma_kernel<<<1, 32>>>(c, 4, 0.5);
+  CUDA_CHECK(cudaGetLastError());
+  CUDA_CHECK(cudaDeviceSynchronize());
+  printf("\n2^24 + 0.25 + 0.25 + 0.25 + 0.25 + 0.25 + 0.25 + 0.25 + 0.25\n");
+  test_fp4_mma_kernel<<<1, 32>>>(c, 8, 0.25);
 
-  cudaError_t err = cudaGetLastError();
-  if (err != cudaSuccess) {
-    printf("Kernel launch failed: %s\n", cudaGetErrorString(err));
-    return -1;
-  }
-
-  err = cudaDeviceSynchronize();
-  if (err != cudaSuccess) {
-    printf("Kernel execution failed: %s\n", cudaGetErrorString(err));
-    return -1;
-  }
+  CUDA_CHECK(cudaGetLastError());
+  CUDA_CHECK(cudaDeviceSynchronize());
+  printf("Conclusion: Internal accumulator for fp4 has 25 bits precision.\n");
 
   return 0;
 }

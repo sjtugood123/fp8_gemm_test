@@ -53,8 +53,8 @@ __global__ void test_sm120_fp4_mma_strict_packing() {
   //   }
 
   // UE8M0 格式：8-bit 指数，Bias 127。 127(0x7F) -> 2^0 = 1.0
-  uint32_t sfa0 = 0x7F;
-  uint32_t sfb0 = 0x7F;
+  uint32_t sfa0 = 0x7F7F7F7F;
+  uint32_t sfb0 = 0x7F7F7F7F;
 
   // 5. Metadata (SM120 必须参数)
   // 用于索引缩放向量，这里设为0即可
@@ -63,8 +63,10 @@ __global__ void test_sm120_fp4_mma_strict_packing() {
   uint16_t tidB = 0;
   uint16_t bidB = 0;
 
-  // 6. 执行内联汇编 (SM120 MXF8F6F4)
-  // 注意：m16n8k32 对应 A(4 regs), B(2 regs), C(4 regs)
+  /*
+  scale_vec::1X表示整个K维度的向量共享一个缩放因子
+  2X就是K维度切成两份，每份有自己的sf
+  */
   asm volatile("mma.sync.aligned.kind::mxf8f6f4.block_scale.scale_vec::1X."
                "m16n8k32.row.col.f32.e2m1.e2m1.f32.ue8m0 "
                "{%0,  %1,  %2,  %3},"  // D (4 floats)
