@@ -73,10 +73,11 @@ def block_scale_fp4_matmul(  #
 
 def test_block_scale_fp4(M, N, K, BLOCK_M, BLOCK_N, BLOCK_K, VEC_SIZE, with_a_scale, with_b_scale, pack_along_k,
                          scale_type, nonKDim, device, c_init, num_add, add_val):
-    assert M % BLOCK_M == 0
-    assert N % BLOCK_N == 0
-    assert K % BLOCK_K == 0
-    assert num_add <= K
+    
+    assert M % BLOCK_M == 0,"M error"
+    assert N % BLOCK_N == 0,"N error"
+    assert K % BLOCK_K == 0,"K error"
+    assert num_add <= K,"num_add error"
     if is_cuda():
         if scale_type == "float8_e4m3fn" and not pack_along_k:
             pytest.skip("Packing along K is required for float8_e4m3fn")
@@ -98,7 +99,7 @@ def test_block_scale_fp4(M, N, K, BLOCK_M, BLOCK_N, BLOCK_K, VEC_SIZE, with_a_sc
     torch.manual_seed(42)
     packing_dim = 1 if pack_along_k else 0
 
-
+    
     # 直接传tensor
     test_tensor_a = torch.zeros((M, K), dtype=float, device=device)
     for i in range(num_add):
@@ -148,6 +149,16 @@ def test_block_scale_fp4(M, N, K, BLOCK_M, BLOCK_N, BLOCK_K, VEC_SIZE, with_a_sc
     kernel_kwargs = {}
     if is_hip():
         kernel_kwargs["matrix_instr_nonkdim"] = nonKDim
+
+
+    # with torch.cuda.nvtx.range("MyFP4_MMA_Range"):
+    #     k = block_scale_fp4_matmul[grid](a, b, output, a_scale, b_scale, M, N, K, stride_scale, a.stride(0), a.stride(1),
+    #                                  b.stride(0), b.stride(1), output.stride(0), output.stride(1), VEC_SIZE, BLOCK_M,
+    #                                  BLOCK_N, BLOCK_K, NUM_STAGES=NUM_STAGES, PACK_ALONG_K=pack_along_k, c_init=c_init,
+    #                                  **kernel_kwargs)
+    #     torch.cuda.synchronize()
+    # torch.cuda.nvtx.range_pop()
+
     k = block_scale_fp4_matmul[grid](a, b, output, a_scale, b_scale, M, N, K, stride_scale, a.stride(0), a.stride(1),
                                      b.stride(0), b.stride(1), output.stride(0), output.stride(1), VEC_SIZE, BLOCK_M,
                                      BLOCK_N, BLOCK_K, NUM_STAGES=NUM_STAGES, PACK_ALONG_K=pack_along_k, c_init=c_init,
@@ -159,18 +170,22 @@ def test_block_scale_fp4(M, N, K, BLOCK_M, BLOCK_N, BLOCK_K, VEC_SIZE, with_a_sc
     # print(abs_error)
     to_print = "Precision LOST." if abs_error > 1e-5 else "Precision KEPT."
     print(f"output:{output[0,0]} {to_print}\n")
-    if is_cuda():
-        ptx = k.asm["ptx"]
-        if pack_along_k:
-            assert "mxf4nvf4" in ptx
-        else:
-            assert "kind::mxf8f6f4" in ptx
-
     # if is_cuda():
     #     ptx = k.asm["ptx"]
-    #     for i, line in enumerate(ptx.split('\n'), 1):
-    #         # if 'mma' in line:
-    #             print(f"{i}: {line}")
+    #     if pack_along_k:
+    #         assert "mxf4nvf4" in ptx
+    #     else:
+    #         assert "kind::mxf8f6f4" in ptx
+
+    if is_cuda():
+        ptx = k.asm["ptx"]
+        filename = f"kernel_{num_add}_{add_val}_{c_init}.ptx"
+        with open(filename, 'w') as f:
+            f.write(ptx)
+        print(f"PTX 已保存到: {filename}")
+        # for i, line in enumerate(ptx.split('\n'), 1):
+        #     # if 'mma' in line:
+        #         print(f"{i}: {line}")
 
 
 
@@ -192,7 +207,7 @@ if __name__ == "__main__":
     2^25 + 128*0.0625=2^25 + 8 Pass
 
     2^26 + 128*0.125=2^26 + 16 Pass
-    2^26 + 256*0.0625=2^26  FAIL
+    2^26 + 256*0.0625=2^26      FAIL
     """
     #0.5:a->0.5，其余是1.0
     #0.25:a->0.5,b->0.5 其余是1.0
@@ -204,19 +219,19 @@ if __name__ == "__main__":
         # (num_add, add_val, c_init_value)
         # (1, 0.5, 1 << 23),
         # (1, 0.5, (1 << 23) + 1),
-        (2, 0.5, 1 << 23),
-        # (3, 0.5, 1 << 23),
-        (4, 0.5, 1 << 23),
-        (8, 0.5, 1 << 23),
-        (2, 1.0, 1 << 23),
-        (3, 1.0, 1 << 23),
-        (4, 1.0, 1 << 23),
-        (8, 0.25, 1 << 23),
-        (16, 0.125, 1 << 24),
-        (32, 0.0625, 1 << 24),
-        (64, 0.0625, 1 << 25),
-        (128, 0.0625, 1 << 25),
-        (128, 0.125, 1 << 26),
+        # (2, 0.5, 1 << 23),
+        # (4, 0.5, 1 << 23),
+        # (8, 0.5, 1 << 23),
+        # (2, 1.0, 1 << 23),
+        # (3, 1.0, 1 << 23),
+        # (4, 1.0, 1 << 23),
+        # (8, 0.25, 1 << 23),
+        # (4, 0.5, 1 << 24),
+        # (16, 0.125, 1 << 24),
+        # (32, 0.0625, 1 << 24),
+        # (64, 0.0625, 1 << 25),
+        # (128, 0.0625, 1 << 25),
+        # (128, 0.125, 1 << 26),
         (256, 0.0625, 1 << 26),
     ]
     
@@ -229,12 +244,17 @@ if __name__ == "__main__":
         print(f"参数: num_add={num_add}, add_val={add_val}, c_init={c_init_value}(2^{c_init_value.bit_length()-1})")
         try:
             test_block_scale_fp4(
-                M=64,  # 这个不能再降了
-                N=64,
+                # MNK不能降到64以下，为了ptx长度易读，可以降到64
+                # 但是如果要做后面的测试还是需要扩展一下，后面的num_add太长
+                M=1024,
+                N=1024,
                 K=1024,
+                # M=64,  
+                # N=64,
+                # K=64,
                 BLOCK_M=64,
                 BLOCK_N=64,
-                BLOCK_K=128,
+                BLOCK_K=64,
                 VEC_SIZE=32,
                 with_a_scale=True,
                 with_b_scale=True,
@@ -247,7 +267,7 @@ if __name__ == "__main__":
                 add_val=add_val
             )
         except Exception as e:
-            print(f"测试组合 {i} 失败: {e}")
+            print(f"测试组合 {i} 失败{e}\n\n")
     print(f"Triton: {triton.__version__}")
     print("\nConclusion: Internal accumulator for mxfp4 has 29 bits precision.\n")
     

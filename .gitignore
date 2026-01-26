@@ -1,3 +1,5 @@
+*.ncu-rep
+
 .DS_Store
 
 data/

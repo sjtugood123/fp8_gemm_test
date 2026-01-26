@@ -49,7 +49,7 @@ __global__ void test_fp4_mma_kernel(float c, int num, float add) {
   // fragment划分:https://docs.nvidia.com/cuda/parallel-thread-execution/#warp-level-matrix-fragment-mma-16832
   assert(num % 4 == 0 && num <= 128);
   assert(add > 0.125);
-  if (num == 0.25) { // 0.25无法直接表示
+  if (add == 0.25) { // 0.25无法直接表示
     add = 0.5;
     if (threadIdx.x < num / 4) {
       a0 = float_to_fp4_reg(add);
@@ -77,7 +77,7 @@ __global__ void test_fp4_mma_kernel(float c, int num, float add) {
     if (d0 != ref_result) {
       printf("Analysis: Result == C_init. Precision LOST.\n");
     } else {
-      printf("Analysis: Result == 2^24+2. Precision KEPT.\n");
+      printf("Analysis: Result == REF RESULT. Precision KEPT.\n");
     }
   }
 }
@@ -88,15 +88,33 @@ int main() {
   float c = *((float *)&c_init);
   printf("C_init:\n%f\n", c);
   printf("ref result:\n%f\n", c + 2.0f);
+
   printf("\n2^24 + 0.5 + 0.5 + 0.5 + 0.5\n");
   test_fp4_mma_kernel<<<1, 32>>>(c, 4, 0.5);
   CUDA_CHECK(cudaGetLastError());
   CUDA_CHECK(cudaDeviceSynchronize());
+
   printf("\n2^24 + 0.25 + 0.25 + 0.25 + 0.25 + 0.25 + 0.25 + 0.25 + 0.25\n");
   test_fp4_mma_kernel<<<1, 32>>>(c, 8, 0.25);
-
   CUDA_CHECK(cudaGetLastError());
   CUDA_CHECK(cudaDeviceSynchronize());
+
+  // c_init = 0b0'10011000'00000000000000000000000;
+  // c = *((float *)&c_init);
+  // printf("C_init:\n%f\n", c);
+  // printf("\n2^25 + 0.5 + 0.5 + 0.5 + 0.5 + 0.5 + 0.5 + 0.5 + 0.5\n");
+  // test_fp4_mma_kernel<<<1, 32>>>(c, 8, 0.5);
+  // CUDA_CHECK(cudaGetLastError());
+  // CUDA_CHECK(cudaDeviceSynchronize());
+
+  // c_init = 0b0'10011001'00000000000000000000000;
+  // c = *((float *)&c_init);
+  // printf("\n2^26 + 0.5 * 16\n");
+  // printf("C_init:\n%f\n", c);
+  // test_fp4_mma_kernel<<<1, 32>>>(c, 16, 0.5);
+  // CUDA_CHECK(cudaGetLastError());
+  // CUDA_CHECK(cudaDeviceSynchronize());
+
   printf("Conclusion: Internal accumulator for fp4 has 25 bits precision.\n");
 
   return 0;
