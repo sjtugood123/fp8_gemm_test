@@ -1,6 +1,7 @@
 largest k instr / W / fp16 lossless:
 ```
-./paper_test/compile_run.sh
+cd paper_test
+./compile_run.sh
 ```
 
 gemm:
