@@ -28,8 +28,6 @@
 
 //   uint32_t b0 = 0, b1 = 0, b2 = 0, b3 = 0;
 
-//   // 这里不做测试逻辑，你可以自行填充a/b寄存器
-
 //   asm volatile("mma.sync.aligned.m16n8k32.row.col.f32.f16.f16.f32 "
 //                "{%0,  %1,  %2,  %3},"
 //                "{%4,  %5,  %6,  %7,  %8,  %9,  %10, %11},"
@@ -69,36 +67,12 @@ __global__ void test_fp16_mma_kernel_k16(float c) {
   }
 }
 
-// __global__ void test_fp16_mma_kernel_k16(float c) {
-//   float c0 = c;
-//   float c1 = c;
-//   float c2 = c;
-//   float c3 = c;
-
-//   float d0, d1, d2, d3;
-
-//   // k16: A=2 regs, B=1 reg (每个寄存器打包2个half)
-//   uint32_t a0 = 0, a1 = 0;
-
-//   uint32_t b0 = 0;
-
-//   asm volatile("mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 "
-//                "{%0,  %1,  %2,  %3},"
-//                "{%4,  %5},"
-//                "{%6},"
-//                "{%7,  %8,  %9,  %10};\n"
-//                : "=f"(d0), "=f"(d1), "=f"(d2), "=f"(d3)
-//                : "r"(a0), "r"(a1), "r"(b0), "f"(c0), "f"(c1), "f"(c2),
-//                "f"(c3));
-//   printf("k16right\n");
-// }
-
 int main() {
 
   uint32_t c_init = 0b0'10010111'00000000000000000000000; // 2^24
   float c = *((float *)&c_init);
 
-  //   test_fp16_mma_kernel_k32<<<1, 32>>>(c);
+  // test_fp16_mma_kernel_k32<<<1, 32>>>(c);
   test_fp16_mma_kernel_k16<<<1, 32>>>(c);
   CUDA_CHECK(cudaGetLastError());
   CUDA_CHECK(cudaDeviceSynchronize());
