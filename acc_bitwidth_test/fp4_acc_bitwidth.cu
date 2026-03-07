@@ -30,6 +30,109 @@ __host__ __device__ uint32_t float_to_fp4_reg(float x) {
   return full_reg;
 }
 
+__global__ void test_fp4_mma_kernel_k128(float c, int num, float add) {
+  float ref_result = c + num * add;
+  float c0 = c;
+  float c1 = c;
+  float c2 = c;
+  float c3 = c;
+
+  float d0, d1, d2, d3;
+
+  // k128 需要更多寄存器（A:16, B:8）
+  uint32_t a0 = 0, a1 = 0, a2 = 0, a3 = 0;
+  uint32_t a4 = 0, a5 = 0, a6 = 0, a7 = 0;
+  uint32_t a8 = 0, a9 = 0, a10 = 0, a11 = 0;
+  uint32_t a12 = 0, a13 = 0, a14 = 0, a15 = 0;
+
+  uint32_t b0 = 0, b1 = 0, b2 = 0, b3 = 0;
+  uint32_t b4 = 0, b5 = 0, b6 = 0, b7 = 0;
+
+  assert(num % 4 == 0 && num <= 512);
+  assert(add > 0.125);
+
+  if (add == 0.25) {
+    add = 0.5;
+    if (threadIdx.x < num / 4) {
+      uint32_t v = float_to_fp4_reg(add);
+      a0 = v;
+      b0 = v;
+      a1 = v;
+      b1 = v;
+      a2 = v;
+      b2 = v;
+      a3 = v;
+      b3 = v;
+      a4 = v;
+      b4 = v;
+      a5 = v;
+      b5 = v;
+      a6 = v;
+      b6 = v;
+      a7 = v;
+      b7 = v;
+      a8 = v;
+      a9 = v;
+      a10 = v;
+      a11 = v;
+      a12 = v;
+      a13 = v;
+      a14 = v;
+      a15 = v;
+    }
+  } else {
+    if (threadIdx.x < num / 4) {
+      uint32_t va = float_to_fp4_reg(add);
+      uint32_t vb = float_to_fp4_reg(1.0f);
+      a0 = va;
+      b0 = vb;
+      a1 = va;
+      b1 = vb;
+      a2 = va;
+      b2 = vb;
+      a3 = va;
+      b3 = vb;
+      a4 = va;
+      b4 = vb;
+      a5 = va;
+      b5 = vb;
+      a6 = va;
+      b6 = vb;
+      a7 = va;
+      b7 = vb;
+      a8 = va;
+      a9 = va;
+      a10 = va;
+      a11 = va;
+      a12 = va;
+      a13 = va;
+      a14 = va;
+      a15 = va;
+    }
+  }
+
+  asm volatile(
+      "mma.sync.aligned.kind::f8f6f4.m16n8k128.row.col.f32.e2m1.e2m1.f32 "
+      "{%0,  %1,  %2,  %3},"
+      "{%4,  %5,  %6,  %7,  %8,  %9,  %10, %11,"
+      " %12, %13, %14, %15, %16, %17, %18, %19},"
+      "{%20, %21, %22, %23, %24, %25, %26, %27},"
+      "{%28, %29, %30, %31};\n"
+      : "=f"(d0), "=f"(d1), "=f"(d2), "=f"(d3)
+      : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(a4), "r"(a5), "r"(a6), "r"(a7),
+        "r"(a8), "r"(a9), "r"(a10), "r"(a11), "r"(a12), "r"(a13), "r"(a14),
+        "r"(a15), "r"(b0), "r"(b1), "r"(b2), "r"(b3), "r"(b4), "r"(b5), "r"(b6),
+        "r"(b7), "f"(c0), "f"(c1), "f"(c2), "f"(c3));
+
+  if (threadIdx.x == 0) {
+    if (d0 != ref_result) {
+      printf("Analysis: Result == C_init. Precision LOST.\n");
+    } else {
+      printf("Analysis: Result == REF RESULT. Precision KEPT.\n");
+    }
+  }
+}
+
 __global__ void test_fp4_mma_kernel(float c, int num, float add) {
   float ref_result = c + num * add;
   float c0 = c;
@@ -98,6 +201,8 @@ int main() {
   test_fp4_mma_kernel<<<1, 32>>>(c, 8, 0.25);
   CUDA_CHECK(cudaGetLastError());
   CUDA_CHECK(cudaDeviceSynchronize());
+
+  // test_fp4_mma_kernel_k128<<<1, 32>>>(c, 16, 0.5);
 
   // c_init = 0b0'10011000'00000000000000000000000;
   // c = *((float *)&c_init);
