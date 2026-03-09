@@ -3,6 +3,10 @@ largest k instr / W / fp16 lossless:
 cd paper_test
 ./compile_run.sh
 ```
+|  | K_instr | W |
+| --- | --- | --- |
+| 5090 | 16 | 16 |
+| a100 | 16 | 8 |
 
 gemm:
 
