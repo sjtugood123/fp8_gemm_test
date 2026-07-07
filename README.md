@@ -1,14 +1,25 @@
+largest k instr / W / fp16 lossless:
+```
+cd paper_test
+./compile_run.sh
+```
+|  | K_instr | W |
+| --- | --- | --- |
+| 5090 | 16 | 16 |
+| a100 | 16 | 8 |
+
 gemm:
 
 ```
 ./refresh
+#cutlass kernel
 python example.py
 ```
 
 bitwidth test:
 
 ```
-chmod +x ./acc_bitwidth_test/compile_run.sh
+chmod +x ./accum_test/compile_run.sh
 ./acc_bitwidth_test/compile_run.sh
 ```
 
