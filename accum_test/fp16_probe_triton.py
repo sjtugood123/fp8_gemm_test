@@ -46,11 +46,17 @@ def matmul_precision_kernel(
     output_ptrs = output_ptr + stride_cm * offs_cm[:, None] + stride_cn * offs_cn[None, :]
     tl.store(output_ptrs, accumulator)
 
-def run_precision_probe(base_val, total_k, a_val, b_val):
+def run_precision_probe(base_val, total_k, a_val, b_val, probe_rz=False):
+    if total_k < 0 or total_k > 64:
+        raise ValueError("total_k must be in [0, 64] because the probe vector length is fixed to 64")
+
     # 配置
-    M, N, K = 16, 16, total_k
-    A = torch.full((M, K), a_val, device='cuda', dtype=torch.float16)
-    B = torch.full((K, N), b_val, device='cuda', dtype=torch.float16)
+    M, N, K = 16, 16, 64
+    A = torch.zeros((M, K), device='cuda', dtype=torch.float16)
+    B = torch.zeros((K, N), device='cuda', dtype=torch.float16)
+    if total_k > 0:
+        A[:, :total_k] = a_val
+        B[:total_k, :] = b_val
     C = torch.zeros((M, N), device='cuda', dtype=torch.float32)
 
     grid = (1,) # 只跑一个 block
@@ -68,9 +74,15 @@ def run_precision_probe(base_val, total_k, a_val, b_val):
     expected = base_val + (total_k * a_val * b_val)
     actual = C[0, 0].item()
     
+    if(probe_rz):
+        if(actual==base_val):
+            return True
+        else:
+            return False
+    
     
     print(f"Probe: {base_val} + ({total_k} * {a_val * b_val})")
-    print(f"  Result: {actual} (Exp: {expected})")
+    print(f"  Result: {actual} (Expect: {expected})")
 
     if actual == expected:
         return True
@@ -80,6 +92,12 @@ def run_precision_probe(base_val, total_k, a_val, b_val):
 # run_precision_probe(2**24, 1, 1.0, 1.0)#rz
 
 def probe():
+    #判断是不是rz
+    if run_precision_probe(2**24, 1, 1.0, 1.0, True):
+        print("rz")
+    else:
+        print("not rz") 
+        
     acc_bitwdth=-1
     if not run_precision_probe(2**23, 1, 1.0, 1.0):
         print(f"acc_bitwidth:{acc_bitwdth}")
@@ -113,7 +131,6 @@ def probe():
     print(f"acc_bitwidth:{acc_bitwdth}")
 
 probe()
-
 
 
 

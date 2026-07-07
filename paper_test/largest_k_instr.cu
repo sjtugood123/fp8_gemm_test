@@ -2,7 +2,6 @@
 #include <cstdio>
 #include <cuda_fp16.h>
 #include <cuda_fp8.h> // 引入FP8支持
-#include <cute/arch/mma_sm120.hpp>
 
 #define CUDA_CHECK(call)                                                       \
   do {                                                                         \

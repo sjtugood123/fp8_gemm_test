@@ -10,7 +10,7 @@ root_dir = os.path.abspath(os.path.join(this_dir, ".."))
 cpp_src = os.path.join(this_dir, "binding.cpp")
 # cu_srcs = []
 # cu_srcs += glob.glob(os.path.join(this_dir, "*.cu"))
-cu_srcs = glob.glob(os.path.join(this_dir, "kernel", "*.cu"), recursive=True)
+cu_srcs = glob.glob(os.path.join(this_dir, "gemm_kernel", "*.cu"), recursive=True)
 # 去重并保序
 seen = set()
 sources = [cpp_src] + [s for s in cu_srcs if not (s in seen or seen.add(s))]
@@ -32,7 +32,7 @@ setup(
                 os.path.join(this_dir, "include"),
                 os.path.join(home, "cutlass", "include"),
                 os.path.join(home, "cutlass", "tools/util/include"),
-                os.path.join("/home/xtzhao/miniconda3/envs/llm_inference/lib/python3.12/site-packages/torch/include/torch/csrc/api/include/torch")
+                os.path.join(this_dir, "include")
             ],
             extra_compile_args={
                 "cxx": ["-O3", "-std=c++17", "-D_GLIBCXX_USE_CXX11_ABI=0"],

@@ -1,7 +1,7 @@
 #include "scaled_mm_blockwise_sm120_fp8_dispatch.cuh"
 #include "scaled_mm_epilogues_c3x.hpp"
 #include "scaled_mm_kernels.hpp"
-#include "types.h"
+#include "common.hpp"
 #include <cuda.h>
 #include <cuda_fp16.h>
 
@@ -21,7 +21,7 @@ void cutlass_scaled_mm_blockwise_sm120_fp8(torch::Tensor &out,
     // cutlass_gemm_blockwise_sm120_fp8_dispatch<cutlass::half_t>(
     //     out, a, b, a_scales, b_scales);
     TORCH_CHECK(out.dtype() == torch::kFloat32);
-    cutlass_gemm_blockwise_sm120_fp8_dispatch<cutlass::kFloat32_t>(
+    cutlass_gemm_blockwise_sm120_fp8_dispatch<float>(
         out, a, b, a_scales, b_scales);
   }
 }
